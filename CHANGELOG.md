@@ -1,3 +1,62 @@
+# 0.4.12 - 26 Apr 2023
+Fix:
+- CatchResponse to return 200 status code by default when using Eden Treaty
+
+# 0.4.11 - 26 Apr 2023
+Fix:
+- response schema doesn't unwrap response type
+
+# 0.4.10 - 25 Apr 2023
+Fix:
+- Update Raikiri stability
+
+# 0.4.9 - 21 Apr 2023
+Improvement:
+- Add support for `parse` in websocket [#33](https://github.com/elysiajs/elysia/pull/33)
+
+Fix:
+- Inherits out-of-order `onError` life cycle in nested group
+- Update Raikiri to 0.1.2 to handle mangled part
+
+# 0.4.8 - 18 Apr 2023
+Fix:
+- Fix LocalHandler doesn't check single type response
+
+# 0.4.7 - 18 Apr 2023
+Improvement:
+- Update Raikiri to ^1.1.0
+
+# 0.4.6 - 10 Apr 2023
+Improvement:
+- perf: add static route main class
+- perf: reduce `ComposedHandler` to function instead of nested object
+
+Fix:
+- `group` and `guard` shouldn't decorate a request on type-level (acceptable on run-time level for shared memory)
+
+# 0.4.5 - 6 Apr 2023
+Fix:
+- Using default value check for `set.status` instead truthy value
+
+# 0.4.4 - 6 Apr 2023
+Improvement:
+- using `isNotEmpty` for `mapResponse`
+- pre check if `set.headers['Set-Cookie']` is array before converting to headers
+- using `mapPathnameAndQueryRegEx.exec(request.url)` instead of `request.url.match(mapPathnameAndQueryRegEx)`
+
+# 0.4.3 - 31 Mar 2023
+Fix:
+- Scoped decorators
+
+# 0.4.2 - 31 Mar 2023
+Improvement:
+- Use constructor name for faster handler matching
+- Map Promise
+
+# 0.4.1 - 31 Mar 2023
+Fix:
+- remove type module from package.json
+
 # 0.4.0 - 30 Mar 2023
 Feature:
 - Ahead of Time compilation

@@ -1,3 +1,4 @@
+/* eslint-disable no-case-declarations */
 import type { Context } from './context'
 
 export const isNotEmpty = (obj: Object) => {
@@ -6,34 +7,36 @@ export const isNotEmpty = (obj: Object) => {
 	return false
 }
 
-const parseSetCookies = (headers: Headers, setCookie: string | string[]) => {
-	if (Array.isArray(setCookie)) {
-		headers.delete('Set-Cookie')
+const parseSetCookies = (headers: Headers, setCookie: string[]) => {
+	headers.delete('Set-Cookie')
 
-		for (let i = 0; i < setCookie.length; i++) {
-			const index = setCookie[i].indexOf('=')
+	for (let i = 0; i < setCookie.length; i++) {
+		const index = setCookie[i].indexOf('=')
 
-			headers.append(
-				'Set-Cookie',
-				`${setCookie[i].slice(0, index)}=${setCookie[i].slice(
-					index + 1
-				)}`
-			)
-		}
+		headers.append(
+			'Set-Cookie',
+			`${setCookie[i].slice(0, index)}=${setCookie[i].slice(index + 1)}`
+		)
 	}
 
 	return headers
 }
 
 // We don't want to assign new variable to be used only once here
-export const mapEarlyResponse = (response: unknown, set: Context['set']) => {
+export const mapEarlyResponse = (
+	response: unknown,
+	set: Context['set']
+): Response | undefined => {
 	if (isNotEmpty(set.headers) || set.status !== 200 || set.redirect) {
 		if (set.redirect) {
 			set.headers.Location = set.redirect
 			set.status = 302
 		}
 
-		if (set.headers['Set-Cookie'])
+		if (
+			set.headers['Set-Cookie'] &&
+			Array.isArray(set.headers['Set-Cookie'])
+		)
 			// @ts-ignore
 			set.headers = parseSetCookies(
 				new Headers(set.headers),
@@ -48,27 +51,44 @@ export const mapEarlyResponse = (response: unknown, set: Context['set']) => {
 				})
 
 			case 'object':
-				if (response instanceof Error)
-					return errorToResponse(response, set.headers)
-				if (response instanceof Response) {
-					for (const key in set.headers)
-						response.headers.append(key, set.headers[key])
+				switch (response?.constructor) {
+					case Error:
+						return errorToResponse(response as Error, set.headers)
 
-					return response
+					case Response:
+						for (const key in set.headers)
+							(response as Response)!.headers.append(
+								key,
+								set.headers[key]
+							)
+
+						return response as Response
+
+					case Blob:
+						return new Response(response as Blob, {
+							status: set.status,
+							headers: set.headers
+						})
+
+					case Promise:
+						// @ts-ignore
+						return (response as Promise<unknown>).then((x) => {
+							const r = mapEarlyResponse(x, set)
+
+							if (r !== undefined) return r
+
+							return
+						})
+
+					default:
+						if (!set.headers['Content-Type'])
+							set.headers['Content-Type'] = 'application/json'
+
+						return new Response(JSON.stringify(response), {
+							status: set.status,
+							headers: set.headers
+						})
 				}
-				if (response instanceof Blob)
-					return new Response(response, {
-						status: set.status,
-						headers: set.headers
-					})
-
-				if (!set.headers['Content-Type'])
-					set.headers['Content-Type'] = 'application/json'
-
-				return new Response(JSON.stringify(response), {
-					status: set.status,
-					headers: set.headers
-				})
 
 			// ? Maybe response or Blob
 			case 'function':
@@ -102,16 +122,33 @@ export const mapEarlyResponse = (response: unknown, set: Context['set']) => {
 				return new Response(response)
 
 			case 'object':
-				if (response instanceof Response) return response
-				if (response instanceof Error)
-					return errorToResponse(response, set.headers)
-				if (response instanceof Blob) return new Response(response)
+				switch (response?.constructor) {
+					case Error:
+						return errorToResponse(response as Error, set.headers)
 
-				return new Response(JSON.stringify(response), {
-					headers: {
-						'content-type': 'application/json'
-					}
-				})
+					case Response:
+						return response as Response
+
+					case Blob:
+						return new Response(response as Blob)
+
+					case Promise:
+						// @ts-ignore
+						return (response as Promise<unknown>).then((x) => {
+							const r = mapEarlyResponse(x, set)
+
+							if (r !== undefined) return r
+
+							return
+						})
+
+					default:
+						return new Response(JSON.stringify(response), {
+							headers: {
+								'content-type': 'application/json'
+							}
+						})
+				}
 
 			// ? Maybe response or Blob
 			case 'function':
@@ -132,13 +169,16 @@ export const mapResponse = (
 	response: unknown,
 	set: Context['set']
 ): Response => {
-	if (Object.keys(set.headers).length || set.status !== 200 || set.redirect) {
+	if (isNotEmpty(set.headers) || set.status !== 200 || set.redirect) {
 		if (set.redirect) {
 			set.headers.Location = set.redirect
 			set.status = 302
 		}
 
-		if (set.headers?.['Set-Cookie'])
+		if (
+			set.headers['Set-Cookie'] &&
+			Array.isArray(set.headers['Set-Cookie'])
+		)
 			// @ts-ignore
 			set.headers = parseSetCookies(
 				new Headers(set.headers),
@@ -171,6 +211,10 @@ export const mapResponse = (
 							status: set.status,
 							headers: set.headers
 						})
+
+					case Promise:
+						// @ts-ignore
+						return response.then((x) => mapResponse(x, set))
 
 					default:
 						if (!set.headers['Content-Type'])
@@ -217,16 +261,27 @@ export const mapResponse = (
 				return new Response(response)
 
 			case 'object':
-				if (response instanceof Response) return response
-				if (response instanceof Error)
-					return errorToResponse(response, set.headers)
-				if (response instanceof Blob) return new Response(response)
+				switch (response?.constructor) {
+					case Error:
+						return errorToResponse(response as Error, set.headers)
 
-				return new Response(JSON.stringify(response), {
-					headers: {
-						'content-type': 'application/json'
-					}
-				})
+					case Response:
+						return response as Response
+
+					case Blob:
+						return new Response(response as Blob)
+
+					case Promise:
+						// @ts-ignore
+						return response.then((x) => mapResponse(x, set))
+
+					default:
+						return new Response(JSON.stringify(response), {
+							headers: {
+								'content-type': 'application/json'
+							}
+						})
+				}
 
 			// ? Maybe response or Blob
 			case 'function':

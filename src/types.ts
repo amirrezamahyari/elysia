@@ -47,11 +47,11 @@ export type Handler<
 	CatchResponse = unknown
 > = (
 	context: Context<Route, Instance['store']> & Instance['request']
-) => IsUnknown<Route['response']> extends false
-	? Route['response'] extends Record<number, infer Unioned>
-		? Response | MaybePromise<Unioned>
-		: Response | MaybePromise<Route['response']>
-	: Response | MaybePromise<CatchResponse>
+) => IsUnknown<Route['response']> extends true
+	? Response | MaybePromise<CatchResponse>
+	: Route['response'] extends TSchema
+	? Response | MaybePromise<UnwrapSchema<Route['response']>>
+	: Response | MaybePromise<Route['response']>
 
 export type NoReturnHandler<
 	Route extends TypedRoute = TypedRoute,
@@ -428,10 +428,7 @@ export type OverwritableTypeRoute = {
 	response?: unknown
 }
 
-export type ComposedHandler = {
-	handle: (context: Context) => MaybePromise<Response>
-	onError: ErrorHandler[]
-}
+export type ComposedHandler = (context: Context) => MaybePromise<Response>
 
 export interface ElysiaConfig {
 	fn?: string

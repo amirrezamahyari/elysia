@@ -3,7 +3,7 @@ import { Elysia } from '../src'
 import { describe, expect, it } from 'bun:test'
 import { req } from './utils'
 
-describe('Guard', () => {
+describe('guard', () => {
 	it('inherits global', async () => {
 		const app = new Elysia().state('counter', 0).guard(
 			{
@@ -40,5 +40,15 @@ describe('Guard', () => {
 		const res = await app.handle(req('/counter')).then((r) => r.text())
 
 		expect(res).toBe('2')
+	})
+
+	it('decorate guard', async () => {
+		const app = new Elysia().guard({}, (app) =>
+			app.decorate('a', 'b').get('/', ({ a }) => a)
+		)
+
+		const res = await app.handle(req('/')).then((x) => x.text())
+
+		expect(res).toBe('b')
 	})
 })

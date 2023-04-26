@@ -13,7 +13,8 @@ import {
 	mergeHook,
 	getSchemaValidator,
 	getResponseSchemaValidator,
-	mapPathnameAndQueryRegEx
+	mapPathnameAndQueryRegEx,
+	mergeDeep
 } from './utils'
 import { registerSchemaPath } from './schema'
 import { mapErrorCode, mapErrorStatus } from './error'
@@ -53,7 +54,6 @@ import type {
 	MaybePromise,
 	IsNever,
 	MergeUnionObjects,
-	TypedRouteToEden,
 	TypedWSRouteToEden,
 	UnwrapSchema,
 	ExtractPath
@@ -109,6 +109,8 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 
 	private router = new Raikiri<ComposedHandler>()
 	protected routes: InternalRoute<Instance>[] = []
+	// Static
+	private _s: Map<string, ComposedHandler> = new Map()
 	private wsRouter: Raikiri<ElysiaWSOptions> | undefined
 
 	private lazyLoadModules: Promise<Elysia<any>>[] = []
@@ -181,16 +183,16 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 
 		const hooks = mergeHook(clone(this.event), hook as RegisteredHook)
 
-		const mainHandler = {
-			handle: composeHandler({
-				method,
-				hooks,
-				validator: validator as any,
-				handler,
-				handleError: this.handleError
-			}),
-			onError: hooks.error
-		}
+		const mainHandler = composeHandler({
+			method,
+			hooks,
+			validator: validator as any,
+			handler,
+			handleError: this.handleError
+		})
+
+		if (!path.includes('/:') && !path.includes('/*'))
+			this._s.set(method + path, mainHandler)
 
 		this.router.add(method, path, mainHandler as any)
 	}
@@ -463,9 +465,9 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 		) => NewElysia
 	): NewElysia extends Elysia<infer NewInstance>
 		? Elysia<{
-				request: Instance['request'] & NewInstance['request']
-				schema: Instance['schema'] & NewInstance['schema']
-				store: Instance['store'] & NewInstance['store']
+				request: Instance['request']
+				schema: Instance['schema']
+				store: Instance['store']
 				meta: Instance['meta'] &
 					(Omit<NewInstance['meta'], typeof SCHEMA> &
 						Record<
@@ -484,6 +486,7 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 		if (this.wsRouter) instance.use(ws())
 
 		const sandbox = run(instance)
+		this.decorators = mergeDeep(this.decorators, instance.decorators)
 
 		if (sandbox.event.request.length)
 			this.event.request = [
@@ -567,13 +570,19 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 			}>
 		) => NewElysia
 	): NewElysia extends Elysia<infer NewInstance>
-		? Elysia<NewInstance & Instance>
+		? Elysia<{
+				request: Instance['request']
+				store: Instance['store']
+				schema: Instance['schema']
+				meta: Instance['meta'] & NewInstance['schema']
+		  }>
 		: this {
 		const instance = new Elysia<any>()
 		instance.store = this.store
 		if (this.wsRouter) instance.use(ws())
 
 		const sandbox = run(instance)
+		this.decorators = mergeDeep(this.decorators, instance.decorators)
 
 		if (sandbox.event.request.length)
 			this.event.request = [
@@ -599,7 +608,14 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 					method,
 					path,
 					handler,
-					mergeHook(hook as LocalHook<any>, localHook)
+					mergeHook(hook as LocalHook<any>, {
+						...localHook,
+						error: !localHook.error
+							? sandbox.event.error
+							: Array.isArray(localHook.error)
+							? [...localHook.error, ...sandbox.event.error]
+							: [localHook.error, ...sandbox.event.error]
+					})
 				)
 			}
 		)
@@ -835,7 +851,9 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 												ReturnType<Handler>
 											>
 									  }
-									: ReturnType<Handler>
+									  : {
+										'200': ReturnType<Handler>
+									}
 							}
 						}
 					}
@@ -936,7 +954,9 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 												ReturnType<Handler>
 											>
 									  }
-									: ReturnType<Handler>
+									: {
+										'200': ReturnType<Handler>
+									}
 							}
 						}
 					}
@@ -1037,7 +1057,9 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 												ReturnType<Handler>
 											>
 									  }
-									: ReturnType<Handler>
+									  : {
+										'200': ReturnType<Handler>
+									}
 							}
 						}
 					}
@@ -1138,7 +1160,9 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 												ReturnType<Handler>
 											>
 									  }
-									: ReturnType<Handler>
+									  : {
+										'200': ReturnType<Handler>
+									}
 							}
 						}
 					}
@@ -1239,7 +1263,9 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 												ReturnType<Handler>
 											>
 									  }
-									: ReturnType<Handler>
+									  : {
+										'200': ReturnType<Handler>
+									}
 							}
 						}
 					}
@@ -1340,7 +1366,9 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 												ReturnType<Handler>
 											>
 									  }
-									: ReturnType<Handler>
+									  : {
+										'200': ReturnType<Handler>
+									}
 							}
 						}
 					}
@@ -1436,7 +1464,9 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 												ReturnType<Handler>
 											>
 									  }
-									: ReturnType<Handler>
+									  : {
+										'200': ReturnType<Handler>
+									}
 							}
 						}
 					}
@@ -1537,7 +1567,9 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 												ReturnType<Handler>
 											>
 									  }
-									: ReturnType<Handler>
+									  : {
+										'200': ReturnType<Handler>
+									}
 							}
 						}
 					}
@@ -1638,7 +1670,9 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 												ReturnType<Handler>
 											>
 									  }
-									: ReturnType<Handler>
+									  : {
+										'200': ReturnType<Handler>
+									}
 							}
 						}
 					}
@@ -1739,7 +1773,9 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 												ReturnType<Handler>
 											>
 									  }
-									: ReturnType<Handler>
+									  : {
+										'200': ReturnType<Handler>
+									}
 							}
 						}
 					}
@@ -1813,8 +1849,6 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 			path,
 			// @ts-ignore
 			(context) => {
-				console.log('Got', context.request.url)
-
 				if (
 					// @ts-ignore
 					this.server?.upgrade(context.request, {
@@ -1844,6 +1878,7 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 				return 'Expected a websocket connection'
 			},
 			{
+				parse: options.parse,
 				beforeHandle: options.beforeHandle,
 				transform: options.transform,
 				schema: {
@@ -1952,7 +1987,9 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 												ReturnType<Handler>
 											>
 									  }
-									: ReturnType<Handler>
+									  : {
+										'200': ReturnType<Handler>
+									}
 							}
 						}
 					}
@@ -2165,14 +2202,14 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 	/**
 	 * Handle can be either sync or async to save performance.
 	 *
-	 * Beside for benchmark purpose, please use 'handle' instead.
+	 * Beside benchmark purpose, please use 'handle' instead.
 	 */
 	innerHandle = (request: Request): MaybePromise<Response> => {
 		const context: Context = this.decorators as any as Context
 		context.request = request
 		context.set = {
-			status: 200,
-			headers: {}
+			headers: {},
+			status: 200
 		}
 
 		if (this.event.request.length)
@@ -2188,23 +2225,34 @@ export default class Elysia<Instance extends ElysiaInstance = ElysiaInstance> {
 				return this.handleError(request, error as Error, context.set)
 			}
 
-		const fracture = request.url.match(mapPathnameAndQueryRegEx)!
-		const route =
-			this.router.match(request.method, fracture[1]) ??
-			this.router.match('ALL', fracture[1])
+		const fracture = mapPathnameAndQueryRegEx.exec(request.url)!
 
-		if (!route)
-			return this.handleError(
-				request,
-				new Error('NOT_FOUND'),
-				context.set
-			)
-
-		context.params = route.params
 		if (fracture[2]) context.query = parseQuery(fracture[2])
 		else context.query = {}
 
-		return route.store.handle(context)
+		const handle = this._s.get(request.method + fracture[1])
+		if (handle) {
+			context.params = {}
+
+			return handle(context)
+		} else {
+			const route =
+				// @ts-ignore
+				this.router._m(request.method, fracture[1]) ??
+				// @ts-ignore
+				this.router._m('ALL', fracture[1])
+
+			if (!route)
+				return this.handleError(
+					request,
+					new Error('NOT_FOUND'),
+					context.set
+				)
+
+			context.params = route.params
+
+			return route.store(context)
+		}
 	}
 
 	handleError = async (
